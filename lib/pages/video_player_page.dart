@@ -24,6 +24,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4";
 
   final VideoStorage _storage = VideoStorage();
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -37,6 +38,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       _flickManager?.dispose();
       setState(() {
         _flickManager = null;
+        _isLoading = false;
       });
       return;
     }
@@ -45,10 +47,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
     setState(() {
       _flickManager = null;
+      _isLoading = true;
     });
 
-
     File? videoFile;
+    VideoPlayerController? controller;
 
     try {
       final fileInfo = await DefaultCacheManager().getFileFromCache(trimmedUrl);
@@ -61,22 +64,31 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         videoFile = file;
         print('Video downloaded and saved to cache: ${videoFile.path}');
       }
+
+      if (videoFile != null) {
+        controller = VideoPlayerController.file(videoFile!);
+      } else {
+        controller = VideoPlayerController.networkUrl(Uri.parse(trimmedUrl));
+      }
+
     } catch (e) {
       print('Error during caching/downloading: $e');
-      _flickManager = FlickManager(
-        videoPlayerController: VideoPlayerController.networkUrl(Uri.parse(trimmedUrl)),
-      );
-      setState(() {});
-      return;
+
+      controller = VideoPlayerController.networkUrl(Uri.parse(trimmedUrl));
     }
 
-    if (videoFile != null) {
-      setState(() {
+
+    setState(() {
+      //stip loading
+      _isLoading = false;
+
+      if (controller != null) {
+        // FlickManager set
         _flickManager = FlickManager(
-          videoPlayerController: VideoPlayerController.file(videoFile!),
+          videoPlayerController: controller!,
         );
-      });
-    }
+      }
+    });
   }
 
   void _playSampleVideo() {
@@ -232,6 +244,24 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                   flickManager: _flickManager!,
                 ),
               )
+
+
+            else if (_isLoading)
+
+              const AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(color: Colors.white),
+                      SizedBox(height: 15),
+                      Text("Loading video...", style: TextStyle(color: Colors.white70, fontSize: 16)),
+                    ],
+                  ),
+                ),
+              )
+
             else
               const Center(
                 child: Padding(
