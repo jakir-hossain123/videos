@@ -1,6 +1,10 @@
 import 'package:flick_video_player/flick_video_player.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:video_player/video_player.dart';
+import 'package:videos/pages/saved_video_page.dart';
+import 'package:videos/pages/video_storage.dart';
+import 'dart:io';
 
 class VideoPlayerPage extends StatefulWidget {
   const VideoPlayerPage({super.key});
@@ -12,17 +16,21 @@ class VideoPlayerPage extends StatefulWidget {
 class _VideoPlayerPageState extends State<VideoPlayerPage> {
   FlickManager? _flickManager;
 
+
+
   final TextEditingController _urlController = TextEditingController();
 
   final String _sampleVideoUrl =
-      "https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4";
+      "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4";
+
+  final VideoStorage _storage = VideoStorage();
 
   @override
   void initState() {
     super.initState();
   }
 
-  void _loadVideoFromUrl(String url) {
+  void _loadVideoFromUrl(String url) async {
     final trimmedUrl = url.trim();
 
     if (trimmedUrl.isEmpty) {
@@ -36,15 +44,45 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     _flickManager?.dispose();
 
     setState(() {
+      _flickManager = null;
+    });
+
+
+    File? videoFile;
+
+    try {
+      final fileInfo = await DefaultCacheManager().getFileFromCache(trimmedUrl);
+
+      if (fileInfo != null) {
+        videoFile = fileInfo.file;
+        print('Video loaded from cache: ${videoFile.path}');
+      } else {
+        final file = await DefaultCacheManager().getSingleFile(trimmedUrl);
+        videoFile = file;
+        print('Video downloaded and saved to cache: ${videoFile.path}');
+      }
+    } catch (e) {
+      print('Error during caching/downloading: $e');
       _flickManager = FlickManager(
         videoPlayerController: VideoPlayerController.networkUrl(Uri.parse(trimmedUrl)),
       );
-    });
+      setState(() {});
+      return;
+    }
+
+    if (videoFile != null) {
+      setState(() {
+        _flickManager = FlickManager(
+          videoPlayerController: VideoPlayerController.file(videoFile!),
+        );
+      });
+    }
   }
 
   void _playSampleVideo() {
     _loadVideoFromUrl(_sampleVideoUrl);
   }
+
 
   void _resetPlayer() {
     _flickManager?.dispose();
@@ -52,6 +90,38 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     setState(() {
       _flickManager = null;
     });
+  }
+
+
+  void _saveVideoUrl() async {
+    final urlToSave = _urlController.text.trim();
+    if (urlToSave.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid video URL to save.')),
+      );
+      return;
+    }
+
+    await _storage.saveVideo(urlToSave);
+
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Video link saved successfully!')),
+    );
+  }
+
+
+
+  void _navigateToSavedVideos() async {
+    final resultUrl = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SavedVideosPage()),
+    );
+
+    if (resultUrl != null && resultUrl is String) {
+      _urlController.text = resultUrl;
+      _loadVideoFromUrl(resultUrl);
+    }
   }
 
   @override
@@ -95,6 +165,19 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
               style: const TextStyle(color: Colors.black),
               keyboardType: TextInputType.url,
             ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: _resetPlayer,
+              icon: const Icon(Icons.close),
+              label: const Text(
+                'clean url input',
+                style: TextStyle(fontSize: 16),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+              ),
+            ),
+
             const SizedBox(height: 10),
 
             Row( mainAxisAlignment: MainAxisAlignment.center ,
@@ -109,24 +192,36 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                     style: TextStyle(fontSize: 16),
                   ),
                 ),
+                const SizedBox(width: 20),
+
+                // save button
+                ElevatedButton.icon(
+                  onPressed: _saveVideoUrl,
+                  icon: const Icon(Icons.save,color: Colors.white,),
+                  label: const Text(
+                    'Save',
+                    style: TextStyle(fontSize: 16,color: Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.indigo,
+                  ),
+                ),
 
               ],
             ),
-            const SizedBox(width: 10),
+            const SizedBox(height: 10),
             ElevatedButton.icon(
-              onPressed: _resetPlayer, // ধাপ ১ এর ফাংশনটি কল করা হলো
-              icon: const Icon(Icons.refresh),
+              onPressed: _navigateToSavedVideos,
+              icon: const Icon(Icons.list,color: Colors.white,),
               label: const Text(
-                'Restart',
-                style: TextStyle(fontSize: 16),
+                'Go to Saved Videos',
+                style: TextStyle(fontSize: 16,color: Colors.white),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange, // আলাদা রঙ
+                backgroundColor: Colors.purple,
               ),
             ),
-
-
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
 
 
             if (_flickManager != null)
